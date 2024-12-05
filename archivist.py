@@ -4,6 +4,7 @@ import hashlib
 import os
 from pathlib import Path
 import argparse
+import shutil
 import sys
 import time
 
@@ -107,6 +108,12 @@ for f in to_copy:
     checksum = hashlib.sha256()
     _outputs = []
     for p in PATH_DEST:
+        if shutil.disk_usage(p).free < f.stat().st_size:
+            for log in LOGS:
+                log.add_error(f, f"Insufficient space in destination {p}")
+            print(f"Error: Insufficient space in destination {p} for file {f}")
+            sys.exit(1)
+    for p in PATH_DEST:
         dest_file = p / f.relative_to(PATH_SRC)
         dest_file.parent.mkdir(parents=True, exist_ok=True)
         _outputs.append(open(dest_file, 'wb'))
@@ -129,12 +136,10 @@ for f in to_copy:
     
     if REMOVE_AFTER_COPY:
         try:
-            os.remove(f)
+            f.unlink()
         except OSError as e:
             for log in LOGS:
                 log.add_error(f, f"Failed to remove file: {e}")
-
-# TODO: Implement source cleanup
 
 # Cleanup
 for log in LOGS:
