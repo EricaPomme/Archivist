@@ -104,7 +104,8 @@ for f in PATH_SRC.rglob('*'):
         to_copy.append(f)
 
 # Copy files to destination
-for f in to_copy:
+total_files = len(to_copy)
+for file_index, f in enumerate(to_copy, 1):
     checksum = hashlib.sha256()
     _outputs = []
     for p in PATH_DEST:
@@ -117,7 +118,10 @@ for f in to_copy:
         dest_file = p / f.relative_to(PATH_SRC)
         dest_file.parent.mkdir(parents=True, exist_ok=True)
         _outputs.append(open(dest_file, 'wb'))
+    file_size = f.stat().st_size
     _input = open(f, 'rb')
+
+    bytes_copied = 0
     while True:
         chunk = _input.read(CHUNK_SIZE)
         if not chunk:
@@ -125,21 +129,31 @@ for f in to_copy:
         checksum.update(chunk)
         for output in _outputs:
             output.write(chunk)
-    
+        bytes_copied += len(chunk)
+        progress = (bytes_copied / file_size) * 100
+        overall_progress = (file_index / total_files) * 100
+        str_progress = f"{bytes_copied}/{file_size} ({progress:6.2f}%)"
+        str_overall_progress = f"{str(file_index).rjust(len(str(total_files)))}/{total_files} ({overall_progress:6.2f}%)"
+        print(f"\r[{str_overall_progress} | {progress:6.2f}% | {f.name}", end="", flush=True)
+    print()
+
     _input.close()
     for output in _outputs:
         output.close()
-    
+
     checksum_hex = checksum.hexdigest()
     for log in LOGS:
         log.add_checksum(f, checksum_hex)
-    
+
     if REMOVE_AFTER_COPY:
         try:
             f.unlink()
+            print(f"Removed source file: {f}")
         except OSError as e:
             for log in LOGS:
                 log.add_error(f, f"Failed to remove file: {e}")
+            print(f"Failed to remove source file: {f}")
+
 
 # Cleanup
 for log in LOGS:
